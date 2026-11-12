@@ -14,7 +14,8 @@ parameters:
 
 variables:
   imageRepository: 'nirajmaurya/cicd-demo-app'
-
+  AWS_REGION: 'us-east-1'
+  AWS_ACCOUNT_ID: '680160265876'
 pool:
   vmImage: 'ubuntu-latest'
 
