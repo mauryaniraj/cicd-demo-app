@@ -58,3 +58,17 @@ stages:
               tags: |
                 $(Build.BuildId)
                 latest
+
+          - script: |
+              set -euo pipefail
+              REGISTRY=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+              ECR_IMAGE=$REGISTRY/cicd-demo-app
+              aws ecr get-login-password --region $(AWS_REGION) \
+                | docker login --username AWS --password-stdin $REGISTRY
+              docker build -t $ECR_IMAGE:$(Build.BuildId) -t $ECR_IMAGE:latest .
+              docker push $ECR_IMAGE:$(Build.BuildId)
+              docker push $ECR_IMAGE:latest
+            displayName: Build and push to AWS ECR
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
