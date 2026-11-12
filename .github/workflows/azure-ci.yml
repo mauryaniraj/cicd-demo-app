@@ -1,0 +1,59 @@
+name: Azure DevOps CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  azure-pipeline:
+    name: Azure DevOps CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Queue Azure pipeline and wait for the result
+        env:
+          AZDO_ORG: ${{ secrets.AZDO_ORG }}
+          AZDO_PROJECT: ${{ secrets.AZDO_PROJECT }}
+          AZDO_PIPELINE_ID: ${{ secrets.AZDO_PIPELINE_ID }}
+          AZDO_PAT: ${{ secrets.AZDO_PAT }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "pull_request" ]; then
+            # Pull request: build and test only. Do NOT push the image.
+            BODY=$(jq -n --arg ref "refs/pull/${PR_NUMBER}/merge" \
+              '{resources:{repositories:{self:{refName:$ref}}},
+                templateParameters:{pushImage:"false"}}')
+          else
+            # Push to master (this includes merged PRs): build, test, push image.
+            BODY=$(jq -n --arg sha "$GITHUB_SHA" \
+              '{resources:{repositories:{self:{refName:"refs/heads/master",version:$sha}}},
+                templateParameters:{pushImage:"true"}}')
+          fi
+
+          ORG_URL="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}"
+          BASE="${ORG_URL}/_apis/pipelines/${AZDO_PIPELINE_ID}"
+
+          RESPONSE=$(curl -sS --fail-with-body -u ":${AZDO_PAT}" \
+            -H "Content-Type: application/json" -X POST \
+            -d "$BODY" "${BASE}/runs?api-version=7.1")
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "Azure run page: $(echo "$RESPONSE" | jq -r '._links.web.href')"
+
+          while true; do
+            RUN=$(curl -sS --fail-with-body -u ":${AZDO_PAT}" \
+              "${BASE}/runs/${RUN_ID}?api-version=7.1")
+            STATE=$(echo "$RUN" | jq -r '.state')
+            echo "State: $STATE"
+            if [ "$STATE" = "completed" ]; then
+              RESULT=$(echo "$RUN" | jq -r '.result')
+              echo "Result: $RESULT"
+              [ "$RESULT" = "succeeded" ] && exit 0
+              exit 1
+            fi
+            sleep 15
+          done
