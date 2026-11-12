@@ -1,0 +1,60 @@
+# Azure DevOps pipeline: build + test, then (optionally) push image to Docker Hub.
+# It is NOT started by Azure itself. GitHub Actions starts it through the REST API.
+trigger: none
+pr: none
+
+parameters:
+  - name: pushImage
+    displayName: Push image to Docker Hub?
+    type: string
+    default: 'false'
+    values:
+      - 'false'
+      - 'true'
+
+variables:
+  imageRepository: 'nirajmaurya/cicd-demo-app'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: BuildAndTest
+    displayName: Build and test
+    jobs:
+      - job: Maven
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: Use Java 17
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+
+          - script: mvn -B clean verify
+            displayName: Compile and run unit tests
+
+          - task: PublishTestResults@2
+            displayName: Publish test results
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+
+  - stage: PushImage
+    displayName: Push image to Docker Hub
+    dependsOn: BuildAndTest
+    condition: and(succeeded(), eq('${{ parameters.pushImage }}', 'true'))
+    jobs:
+      - job: Docker
+        steps:
+          - task: Docker@2
+            displayName: Build and push image
+            inputs:
+              containerRegistry: 'dockerhub-connection'
+              repository: $(imageRepository)
+              command: buildAndPush
+              Dockerfile: Dockerfile
+              tags: |
+                $(Build.BuildId)
+                latest
