@@ -14,7 +14,7 @@ public class App {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", exchange -> {
-            String text = "Hello from the CI/CD pipeline! 2 + 3 = " + calculator.add(2, 3) + "\n";
+            String text = "Hello world! see my Progress 2 + 3 = " + calculator.add(2, 3) + "\n";
             byte[] body = text.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
