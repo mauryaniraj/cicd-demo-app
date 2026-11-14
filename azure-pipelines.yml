@@ -13,10 +13,10 @@ parameters:
       - 'true'
 
 variables:
-  imageRepository: 'nirajmaurya/cicd-demo-app'
+  imageRepository: 'YOUR_DOCKERHUB_USERNAME/cicd-demo-app'
   AWS_REGION: 'us-east-1'
-  AWS_ACCOUNT_ID: '680160265876'
-  EKS_CLUSTER: 'demo-eks'
+  AWS_ACCOUNT_ID: '123456789012'
+  CONFIG_REPO: 'GITHUB_USER/cicd-demo-config'
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -65,28 +65,25 @@ stages:
           - script: |
               set -euo pipefail
               REGISTRY=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-              ECR_IMAGE=$REGISTRY/cicd-demo-app
+              ECR_IMAGE=$REGISTRY/cicd-demo-app:$(Build.BuildId)
               aws ecr get-login-password --region $(AWS_REGION) \
                 | docker login --username AWS --password-stdin $REGISTRY
-              docker build -t $ECR_IMAGE:$(Build.BuildId) -t $ECR_IMAGE:latest .
-              docker push $ECR_IMAGE:$(Build.BuildId)
-              docker push $ECR_IMAGE:latest
-            displayName: Build and push to AWS ECR
+              docker build -t $ECR_IMAGE .
+              docker push $ECR_IMAGE
+            displayName: Build and push to AWS ECR (build-number tag only)
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
 
           - script: |
               set -euo pipefail
-              ECR_IMAGE=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/cicd-demo-app
-              aws eks update-kubeconfig --name $(EKS_CLUSTER) --region $(AWS_REGION)
-              kubectl set image deployment/cicd-demo-app app=$ECR_IMAGE:$(Build.BuildId)
-              if ! kubectl rollout status deployment/cicd-demo-app --timeout=180s; then
-                echo "Rollout failed, rolling back"
-                kubectl rollout undo deployment/cicd-demo-app
-                exit 1
-              fi
-            displayName: Deploy to EKS
+              git clone https://x-access-token:$(CONFIG_REPO_TOKEN)@github.com/$(CONFIG_REPO).git config
+              cd config
+              sed -i 's|^  tag:.*|  tag: "$(Build.BuildId)"|' charts/cicd-demo-app/values.yaml
+              git config user.name "azure-pipelines"
+              git config user.email "azure-pipelines@users.noreply.github.com"
+              git commit -am "cicd-demo-app: deploy build $(Build.BuildId)"
+              git push origin main
+            displayName: Update image tag in the config repo (GitOps)
             env:
-              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              CONFIG_REPO_TOKEN: $(CONFIG_REPO_TOKEN)
