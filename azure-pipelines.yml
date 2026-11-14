@@ -13,10 +13,10 @@ parameters:
       - 'true'
 
 variables:
-  imageRepository: 'YOUR_DOCKERHUB_USERNAME/cicd-demo-app'
+  imageRepository: 'nirajmaurya/cicd-demo-app'
   AWS_REGION: 'us-east-1'
-  AWS_ACCOUNT_ID: '123456789012'
-  CONFIG_REPO: 'GITHUB_USER/cicd-demo-config'
+  AWS_ACCOUNT_ID: '680160265876'
+  CONFIG_REPO: 'mauryaniraj/cicd-demo-config'
 
 pool:
   vmImage: 'ubuntu-latest'
